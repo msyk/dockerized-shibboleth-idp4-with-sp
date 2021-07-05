@@ -15,6 +15,21 @@ RUN yum -y update \
     && yum -y install httpd shibboleth mod_ssl php \
     && yum -y clean all
 
+# PHP 7.4をインストール
+RUN yum install -y epel-release
+RUN yum install -y http://rpms.remirepo.net/enterprise/remi-release-7.rpm
+RUN yum -y install --enablerepo=remi,remi-php74 php php-devel php-mbstring php-pdo php-xml \
+      php-gd php-fpm php-pgsql php-mysqlnd php-ldap php-opcache php-pecl-zip php-bcmath libzip5
+
+# composerをインストール
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    && php composer-setup.php \
+    && php -r "unlink('composer-setup.php');" \
+    && mv composer.phar /usr/local/bin/composer
+
+# gitをインストール
+RUN yum install -y git
+
 # httpでリクエストを受けても、リダイレクトをhttpsで返せるようにServerNameをhttpsに修正する。
 RUN sed -i -e 's/#ServerName www.example.com:80/ServerName https:\/\/www.example.com:443/' /etc/httpd/conf/httpd.conf
 
@@ -30,6 +45,13 @@ COPY conf/shibboleth2.xml /etc/shibboleth/
 RUN mkdir /var/www/html/secure
 
 COPY app/testsp.php /var/www/html/secure
+COPY app/info.php /var/www/html/secure
+
+RUN cd /var/www/html/secure && git clone https://github.com/msyk/saml-trial
+RUN mkdir -p /var/www/html/secure/saml-trial/lib/src
+RUN cd /var/www/html/secure/saml-trial/lib/src && git clone https://github.com/msyk/INTER-Mediator
+RUN cd /var/www/html/secure/saml-trial/lib/src/INTER-Mediator && composer update
+RUN /var/www/html/secure/saml-trial/lib/src/INTER-Mediator/dist-docs/buildup.sh -D
 
 # certsディレクトリに置いてある証明書をコンテナにコピーする。
 # コンテナ側ではこの証明書を優先して使うようにスクリプトで制御する。
